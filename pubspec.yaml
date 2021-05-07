@@ -1,0 +1,11 @@
+name: dart_webserver
+description: A basic HTTP server framework built in Dart.
+version: 0.1.0
+repository: https://github.com/jonasroussel/dart_webserver
+homepage: https://github.com/jonasroussel/dart_webserver#readme
+
+environment:
+  sdk: '>=2.12.0 <3.0.0'
+
+dev_dependencies:
+  pedantic: ^1.9.0
