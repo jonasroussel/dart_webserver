@@ -273,6 +273,8 @@ class WebServer {
           return;
         }
       }
+
+      if (handler.runtimeType == RequestHandler) break;
     }
   }
 
