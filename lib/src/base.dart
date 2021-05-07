@@ -302,6 +302,15 @@ class WebServer {
     final server = await HttpServer.bind(InternetAddress.anyIPv4, port);
 
     await for (HttpRequest request in server) {
+      if (request.method == 'OPTIONS') {
+        request.response.headers.set(
+          'access-control-allow-methods',
+          'GET,HEAD,PUT,PATCH,POST,DELETE',
+        );
+        request.response.headers.set('access-control-max-age', '3600');
+      }
+      request.response.headers.set('access-control-allow-origin', '*');
+
       await _handleRequest(request);
       await request.response.close();
     }

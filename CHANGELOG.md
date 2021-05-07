@@ -1,3 +1,7 @@
+## 0.1.3
+
+- Temporary CORS policy
+
 ## 0.1.2
 
 - Fix: middleware didn't stop if doesn't return next
