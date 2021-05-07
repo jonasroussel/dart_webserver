@@ -239,14 +239,14 @@ class WebServer {
     final next = () {};
 
     for (var handler in route.handlers) {
+      request.response.statusCode = HttpStatus.ok;
+
       var result = handler.runtimeType == RequestHandler
           ? handler(req, res, next)
           : handler(req, res);
 
       if (result is Future) result = await result;
       if (result == next) continue;
-
-      request.response.statusCode = HttpStatus.ok;
 
       if (result is String || result is num) {
         request.response.writeln(result.toString());

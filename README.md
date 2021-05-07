@@ -1,7 +1,7 @@
 # Dart Web Server
 [![pub package](https://img.shields.io/pub/v/dart_webserver.svg)](https://pub.dev/packages/dart_webserver)
 
-A basic HTTP server framework built in Dart.
+A basic HTTP server framework built in Dart inspired by expressjs.
 
 ## Usage
 
