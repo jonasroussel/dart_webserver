@@ -266,7 +266,7 @@ class WebServer {
           request.response.write(content);
         }
 
-        break;
+        return;
       }
     }
 
@@ -323,7 +323,7 @@ class WebServer {
         request.response.write(content);
       }
 
-      break;
+      return;
     }
   }
 

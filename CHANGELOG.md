@@ -1,3 +1,7 @@
+## 0.2.1
+
+- Fix: global middlewares never close request
+
 ## 0.2.0
 
 - `WebServer.use` can be used to add global middlewares
