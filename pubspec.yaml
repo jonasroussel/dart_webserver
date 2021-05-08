@@ -1,6 +1,6 @@
 name: dart_webserver
 description: A basic HTTP server framework built in Dart inspired by expressjs.
-version: 0.1.3
+version: 0.2.0
 repository: https://github.com/jonasroussel/dart_webserver
 homepage: https://github.com/jonasroussel/dart_webserver#readme
 

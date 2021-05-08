@@ -1,3 +1,7 @@
+## 0.2.0
+
+- `WebServer.use` can be used to add global middlewares
+
 ## 0.1.3
 
 - Temporary CORS policy

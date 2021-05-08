@@ -8,20 +8,11 @@ typedef RequestHandler = dynamic Function(
 );
 typedef RequestEndpoint = dynamic Function(Request req, Response res);
 
-enum QueryParsingStrategy { FIRST, LAST, CONCATENATED }
-
-final queryParsers = {
-  QueryParsingStrategy.FIRST: (List<String> params) => params.first,
-  QueryParsingStrategy.LAST: (List<String> params) => params.last,
-  QueryParsingStrategy.CONCATENATED: (List<String> params) => params.join(),
-};
-
 class Route {
-  Route(this.path, this.handlers, this.queryParsingStrategy);
+  Route(this.path, this.handlers);
 
   final String path;
   final List<Function> handlers;
-  final QueryParsingStrategy queryParsingStrategy;
 }
 
 class Request {
@@ -49,12 +40,11 @@ class Request {
 
   bool get hasBody => body != null;
 
-  Future<Request> parse(Route route) async {
+  Future<void> parseQueryAndBody() async {
     // parse query
     final queryParametersAll = _request.uri.queryParametersAll;
     for (var queryParam in queryParametersAll.entries) {
-      query[queryParam.key] =
-          queryParsers[route.queryParsingStrategy]!(queryParam.value);
+      query[queryParam.key] = queryParam.value.first;
     }
 
     // parse body
@@ -72,8 +62,9 @@ class Request {
     } else {
       body = null;
     }
+  }
 
-    // parse params
+  void parseParams(Route route) {
     var pathSegments = route.path.split('/');
     var uriSegments = _request.uri.path.split('/');
 
@@ -82,8 +73,6 @@ class Request {
         params[pathSegments[i].substring(1)] = uriSegments[i];
       }
     }
-
-    return this;
   }
 }
 
@@ -103,23 +92,22 @@ class Response {
 class WebServer {
   WebServer();
 
+  final Map<String, List<RequestHandler>> _middlewares = {};
   final List<RegExp> _paths = [];
   final List<Map<String, Route>> _binds = [];
 
-  void use(
+  void _route(
     String path,
     RequestEndpoint endpoint, {
     List<RequestHandler> middlewares = const [],
     String? method,
-    QueryParsingStrategy queryParsingStrategy = QueryParsingStrategy.FIRST,
   }) {
     final pattern = _pattern(path);
     final idx = _paths.indexWhere((regex) => regex.pattern == pattern);
 
     if (idx == -1) {
       _paths.add(RegExp(pattern));
-      final route =
-          Route(path, [...middlewares, endpoint], queryParsingStrategy);
+      final route = Route(path, [...middlewares, endpoint]);
       final bind = method == null
           ? <String, Route>{
               'GET': route,
@@ -141,83 +129,147 @@ class WebServer {
 
     if (handlers != null) return;
 
-    _binds[idx][method] =
-        Route(path, [...middlewares, endpoint], queryParsingStrategy);
+    _binds[idx][method] = Route(path, [...middlewares, endpoint]);
+  }
+
+  void use(RequestHandler handler, {String? method}) {
+    if (method != null) {
+      final handlers = _middlewares[method];
+      if (handlers == null) {
+        _middlewares[method] = [handler];
+      } else {
+        _middlewares[method]!.add(handler);
+      }
+    } else {
+      use(handler, method: 'GET');
+      use(handler, method: 'POST');
+      use(handler, method: 'PATCH');
+      use(handler, method: 'PUT');
+      use(handler, method: 'DELETE');
+      use(handler, method: 'OPTIONS');
+    }
   }
 
   void get(
     String path,
     RequestEndpoint endpoint, {
     List<RequestHandler> middlewares = const [],
-    QueryParsingStrategy queryParsingStrategy = QueryParsingStrategy.FIRST,
   }) {
-    use(path, endpoint,
-        middlewares: middlewares,
-        method: 'GET',
-        queryParsingStrategy: queryParsingStrategy);
+    _route(
+      path,
+      endpoint,
+      middlewares: middlewares,
+      method: 'GET',
+    );
   }
 
   void post(
     String path,
     RequestEndpoint endpoint, {
     List<RequestHandler> middlewares = const [],
-    QueryParsingStrategy queryParsingStrategy = QueryParsingStrategy.FIRST,
   }) {
-    use(path, endpoint,
-        middlewares: middlewares,
-        method: 'POST',
-        queryParsingStrategy: queryParsingStrategy);
+    _route(
+      path,
+      endpoint,
+      middlewares: middlewares,
+      method: 'POST',
+    );
   }
 
   void patch(
     String path,
     RequestEndpoint endpoint, {
     List<RequestHandler> middlewares = const [],
-    QueryParsingStrategy queryParsingStrategy = QueryParsingStrategy.FIRST,
   }) {
-    use(path, endpoint,
-        middlewares: middlewares,
-        method: 'PATCH',
-        queryParsingStrategy: queryParsingStrategy);
+    _route(
+      path,
+      endpoint,
+      middlewares: middlewares,
+      method: 'PATCH',
+    );
   }
 
   void put(
     String path,
     RequestEndpoint endpoint, {
     List<RequestHandler> middlewares = const [],
-    QueryParsingStrategy queryParsingStrategy = QueryParsingStrategy.FIRST,
   }) {
-    use(path, endpoint,
-        middlewares: middlewares,
-        method: 'PUT',
-        queryParsingStrategy: queryParsingStrategy);
+    _route(
+      path,
+      endpoint,
+      middlewares: middlewares,
+      method: 'PUT',
+    );
   }
 
   void delete(
     String path,
     RequestEndpoint endpoint, {
     List<RequestHandler> middlewares = const [],
-    QueryParsingStrategy queryParsingStrategy = QueryParsingStrategy.FIRST,
   }) {
-    use(path, endpoint,
-        middlewares: middlewares,
-        method: 'DELETE',
-        queryParsingStrategy: queryParsingStrategy);
+    _route(
+      path,
+      endpoint,
+      middlewares: middlewares,
+      method: 'DELETE',
+    );
   }
 
   void options(
     String path,
     RequestEndpoint endpoint, {
     List<RequestHandler> middlewares = const [],
-    QueryParsingStrategy queryParsingStrategy = QueryParsingStrategy.FIRST,
   }) {
-    use(path, endpoint,
-        middlewares: middlewares,
-        method: 'OPTIONS',
-        queryParsingStrategy: queryParsingStrategy);
+    _route(
+      path,
+      endpoint,
+      middlewares: middlewares,
+      method: 'OPTIONS',
+    );
   }
 
   Future<void> _handleRequest(HttpRequest request) async {
+    final req = Request(request);
+    await req.parseQueryAndBody();
+    final res = Response(request);
+    final next = () {};
+
+    if (_middlewares[request.method] != null) {
+      for (var handler in _middlewares[request.method]!) {
+        var result = handler(req, res, next);
+
+        if (result is Future) result = await result;
+        if (result == next) continue;
+
+        var content;
+
+        if (result is String || result is num) {
+          content = result.toString();
+        } else if (result is Map<String, dynamic> || result is List) {
+          try {
+            content = jsonEncode(result);
+            request.response.headers.contentType = ContentType.json;
+          } catch (ex) {
+            return;
+          }
+        } else if (result != null) {
+          try {
+            content = jsonEncode(result.toJson());
+            request.response.headers.contentType = ContentType.json;
+          } catch (ex) {
+            return;
+          }
+        }
+
+        if (content != null) {
+          request.response.contentLength = content.toString().length;
+          request.response.write(content);
+        }
+
+        break;
+      }
+    }
+
     final index = _paths
         .indexWhere((regex) => regex.hasMatch(_trimSlash(request.uri.path)));
 
@@ -234,9 +286,7 @@ class WebServer {
       return;
     }
 
-    final req = await Request(request).parse(route);
-    final res = Response(request);
-    final next = () {};
+    req.parseParams(route);
 
     for (var handler in route.handlers) {
       request.response.statusCode = HttpStatus.ok;
@@ -248,33 +298,32 @@ class WebServer {
       if (result is Future) result = await result;
       if (result == next) continue;
 
+      var content;
+
       if (result is String || result is num) {
-        request.response.writeln(result.toString());
-        return;
-      }
-
-      if (result is Map<String, dynamic> || result is List) {
+        content = result.toString();
+      } else if (result is Map<String, dynamic> || result is List) {
         try {
-          request.response
-            ..headers.contentType = ContentType.json
-            ..write(jsonEncode(result));
+          content = jsonEncode(result);
+          request.response.headers.contentType = ContentType.json;
+        } catch (ex) {
           return;
+        }
+      } else if (result != null) {
+        try {
+          content = jsonEncode(result.toJson());
+          request.response.headers.contentType = ContentType.json;
         } catch (ex) {
           return;
         }
       }
 
-      if (result != null) {
-        try {
-          request.response
-            ..headers.contentType = ContentType.json
-            ..write(jsonEncode(result.toJson()));
-        } catch (ex) {
-          return;
-        }
+      if (content != null) {
+        request.response.contentLength = content.toString().length;
+        request.response.write(content);
       }
 
-      if (handler.runtimeType == RequestHandler) break;
+      break;
     }
   }
 
@@ -302,15 +351,6 @@ class WebServer {
     final server = await HttpServer.bind(InternetAddress.anyIPv4, port);
 
     await for (HttpRequest request in server) {
-      if (request.method == 'OPTIONS') {
-        request.response.headers.set(
-          'access-control-allow-methods',
-          'GET,HEAD,PUT,PATCH,POST,DELETE',
-        );
-        request.response.headers.set('access-control-max-age', '3600');
-      }
-      request.response.headers.set('access-control-allow-origin', '*');
-
       await _handleRequest(request);
       await request.response.close();
     }
