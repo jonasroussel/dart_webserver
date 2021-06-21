@@ -1,3 +1,7 @@
+## 1.0.0
+
+- NEW v1.0.0 ! BREAKING CHANGES !
+
 ## 0.2.1
 
 - Fix: global middlewares never close request
